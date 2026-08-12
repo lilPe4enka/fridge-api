@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 app = FastAPI()
 
@@ -16,15 +17,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Берем ключ API из настроек сервера (настроим его позже)
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "КЛЮЧ_ПО_УМОЛЧАНИЮ")
-genai.configure(api_key=GEMINI_API_KEY)
+# Берем ключ API из настроек сервера
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
-# Настраиваем модель так, чтобы она всегда возвращала чистый JSON
-generation_config = {"response_mime_type": "application/json"}
-model = genai.GenerativeModel("gemini-1.5-flash", generation_config=generation_config)
+# Инициализируем клиент по новому стандарту
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Словарь для перевода ID в понятные названия продуктов
+# Словарь продуктов
 INGREDIENTS_MAP = {
     1: "Яйца", 3: "Масло", 4: "Мука", 5: "Картошка", 6: "Лук",
     7: "Курица", 8: "Макароны", 9: "Сыр", 10: "Молоко", 11: "Морковь",
@@ -38,13 +37,11 @@ class IngredientsRequest(BaseModel):
 
 @app.post("/api/find-recipes")
 async def find_recipes(request: IngredientsRequest):
-    # Получаем названия продуктов, которые выбрал пользователь
     user_ingredients = [INGREDIENTS_MAP[i] for i in request.ingredient_ids if i in INGREDIENTS_MAP]
     
     if not user_ingredients:
         return {"recipes": []}
 
-    # Формируем промпт (задание) для нейросети
     prompt = f"""
     Пользователь имеет в холодильнике следующие продукты: {', '.join(user_ingredients)}.
     Придумай 3 или 4 вкусных рецепта, которые можно из них приготовить. 
@@ -58,10 +55,27 @@ async def find_recipes(request: IngredientsRequest):
     """
 
     try:
-        # Обращаемся к Gemini
-        response = model.generate_content(prompt)
-        recipes = json.loads(response.text) # Превращаем текст нейросети в питоновский список
+        # Обращаемся к Gemini через новую библиотеку
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+            )
+        )
+        
+        raw_text = response.text.strip()
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+            
+        recipes = json.loads(raw_text.strip()) 
         return {"recipes": recipes}
+        
     except Exception as e:
-        print(f"Ошибка Gemini API: {e}")
+        print("====== ОШИБКА GEMINI ======")
+        print(f"Тип ошибки: {type(e).__name__}")
+        print(f"Описание: {e}")
+        print("===========================")
         return {"recipes": []}
