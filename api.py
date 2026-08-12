@@ -42,13 +42,9 @@ async def root():
 @app.post("/api/find-recipes")
 async def find_recipes(request: IngredientsRequest):
     print("\n====== 1. ПРИШЕЛ ЗАПРОС ОТ ПРИЛОЖЕНИЯ ======")
-    print(f"Полученные ID: {request.ingredient_ids}")
-    
     user_ingredients = [INGREDIENTS_MAP[i] for i in request.ingredient_ids if i in INGREDIENTS_MAP]
-    print(f"Распознанные продукты: {user_ingredients}")
     
     if not user_ingredients:
-        print("====== ОШИБКА: СПИСОК ПРОДУКТОВ ПУСТ ======")
         return {"recipes": []}
 
     time_text = "Любое время." if request.time_limit == "any" else f"Максимальное время готовки: {request.time_limit} минут."
@@ -66,17 +62,15 @@ async def find_recipes(request: IngredientsRequest):
     - "macros": объект с ключами "kcal", "protein", "fat", "carbs"
     """
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.6-flash:generateContent?key={GEMINI_API_KEY}"
+    # ИСПОЛЬЗУЕМ АКТУАЛЬНУЮ И РАБОЧУЮ МОДЕЛЬ
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"responseMimeType": "application/json"}
     }
 
-    print("====== 2. ОТПРАВЛЯЕМ ЗАПРОС В GOOGLE ======")
     try:
         response = requests.post(url, json=payload)
-        print(f"Статус ответа Google: {response.status_code}")
-        
         data = response.json()
         
         if "candidates" in data:
@@ -86,9 +80,7 @@ async def find_recipes(request: IngredientsRequest):
             if raw_text.startswith("```json"): raw_text = raw_text[7:]
             if raw_text.endswith("```"): raw_text = raw_text[:-3]
                 
-            recipes = json.loads(raw_text.strip())
-            print(f"Сгенерировано рецептов: {len(recipes)}")
-            return {"recipes": recipes}
+            return {"recipes": json.loads(raw_text.strip())}
         else:
             print("====== 4. ОШИБКА В ОТВЕТЕ GOOGLE ======")
             print(data)
