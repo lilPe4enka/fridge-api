@@ -5,11 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
-from google import genai
 
 app = FastAPI()
 
-# Разрешаем CORS для связи с вашим фронтендом
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -18,14 +16,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Получаем ключи из окружения Render
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
-# Инициализируем клиент Google GenAI
-client = genai.Client(api_key=GEMINI_API_KEY)
-
-# Карта продуктов
 INGREDIENTS_MAP = {
     1: "Яйца", 3: "Масло", 4: "Мука", 5: "Картошка", 6: "Лук",
     7: "Курица", 8: "Макароны", 9: "Сыр", 10: "Молоко", 11: "Морковь",
@@ -46,7 +39,7 @@ class SendToBotRequest(BaseModel):
 async def root():
     return {"status": "ok", "message": "API работает отлично!"}
 
-# РОУТ 1: Поиск рецептов через нейросеть
+# РОУТ 1: Поиск рецептов ПРЯМЫМ запросом к API (Без библиотек Google)
 @app.post("/api/find-recipes")
 async def find_recipes(request: IngredientsRequest):
     user_ingredients = [INGREDIENTS_MAP[i] for i in request.ingredient_ids if i in INGREDIENTS_MAP]
@@ -68,24 +61,33 @@ async def find_recipes(request: IngredientsRequest):
     - "macros": объект с ключами "kcal", "protein", "fat", "carbs"
     """
 
+    # Прямая ссылка на API Gemini 1.5 Flash
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"responseMimeType": "application/json"}
+    }
+
     try:
-        # Используем самый стабильный метод генерации
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=prompt,
-            config={
-                "response_mime_type": "application/json"
-            }
-        )
+        response = requests.post(url, json=payload)
+        data = response.json()
         
-        raw_text = response.text.strip()
-        # Очистка от маркдауна, если нейросеть его добавила
-        if raw_text.startswith("```json"): raw_text = raw_text[7:]
-        if raw_text.endswith("```"): raw_text = raw_text[:-3]
+        # Если ответ успешный, достаем текст
+        if "candidates" in data:
+            raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
             
-        return {"recipes": json.loads(raw_text.strip())}
+            # Очистка маркдауна
+            if raw_text.startswith("```json"): raw_text = raw_text[7:]
+            if raw_text.endswith("```"): raw_text = raw_text[:-3]
+                
+            return {"recipes": json.loads(raw_text.strip())}
+        else:
+            print("====== ОТВЕТ С ОШИБКОЙ ОТ GOOGLE ======")
+            print(data)
+            return {"recipes": []}
+            
     except Exception as e:
-        print("====== ОШИБКА GEMINI ======")
+        print("====== ОШИБКА СЕРВЕРА ======")
         print(repr(e))
         return {"recipes": []}
 
@@ -93,7 +95,7 @@ async def find_recipes(request: IngredientsRequest):
 @app.post("/api/send-to-bot")
 async def send_to_bot(request: SendToBotRequest):
     if not BOT_TOKEN:
-        return {"success": False, "error": "Токен бота не настроен на сервере (BOT_TOKEN)"}
+        return {"success": False, "error": "Токен бота не настроен на сервере"}
     
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
