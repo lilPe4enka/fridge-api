@@ -5,11 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
-from google import genai
 
 app = FastAPI()
 
-# Разрешаем CORS для связи с вашим фронтендом
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -18,14 +16,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Получаем ключи из окружения Render
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
-# Инициализируем клиент Google GenAI
-client = genai.Client(api_key=GEMINI_API_KEY)
-
-# Карта продуктов
 INGREDIENTS_MAP = {
     1: "Яйца", 3: "Масло", 4: "Мука", 5: "Картошка", 6: "Лук",
     7: "Курица", 8: "Макароны", 9: "Сыр", 10: "Молоко", 11: "Морковь",
@@ -46,10 +39,11 @@ class SendToBotRequest(BaseModel):
 async def root():
     return {"status": "ok", "message": "API работает отлично!"}
 
-# РОУТ 1: Поиск рецептов через нейросеть
 @app.post("/api/find-recipes")
 async def find_recipes(request: IngredientsRequest):
+    print("\n====== 1. ПРИШЕЛ ЗАПРОС ОТ ПРИЛОЖЕНИЯ ======")
     user_ingredients = [INGREDIENTS_MAP[i] for i in request.ingredient_ids if i in INGREDIENTS_MAP]
+    
     if not user_ingredients:
         return {"recipes": []}
 
@@ -58,7 +52,7 @@ async def find_recipes(request: IngredientsRequest):
     prompt = f"""
     Пользователь имеет: {', '.join(user_ingredients)}.
     {time_text}
-    Придумай 3 вкусных рецепта. Можно добавлять 1-2 простых ингредиента.
+    Придумай5-6 вкусных рецепта. Можно добавлять 1-2 простых ингредиента. Специи не в счёт.
     Верни ответ СТРОГО в формате JSON - массив объектов:
     - "name": строка (название с эмодзи)
     - "match_percentage": число 
@@ -68,40 +62,39 @@ async def find_recipes(request: IngredientsRequest):
     - "macros": объект с ключами "kcal", "protein", "fat", "carbs"
     """
 
+    # ИСПОЛЬЗУЕМ АКТУАЛЬНУЮ И РАБОЧУЮ МОДЕЛЬ
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"responseMimeType": "application/json"}
+    }
+
     try:
-        # Используем самый стабильный метод генерации
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=prompt,
-            config={
-                "response_mime_type": "application/json"
-            }
-        )
+        response = requests.post(url, json=payload)
+        data = response.json()
         
-        raw_text = response.text.strip()
-        # Очистка от маркдауна, если нейросеть его добавила
-        if raw_text.startswith("```json"): raw_text = raw_text[7:]
-        if raw_text.endswith("```"): raw_text = raw_text[:-3]
+        if "candidates" in data:
+            print("====== 3. GOOGLE УСПЕШНО ВЕРНУЛ РЕЦЕПТЫ ======")
+            raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
             
-        return {"recipes": json.loads(raw_text.strip())}
+            if raw_text.startswith("```json"): raw_text = raw_text[7:]
+            if raw_text.endswith("```"): raw_text = raw_text[:-3]
+                
+            return {"recipes": json.loads(raw_text.strip())}
+        else:
+            print("====== 4. ОШИБКА В ОТВЕТЕ GOOGLE ======")
+            print(data)
+            return {"recipes": []}
+            
     except Exception as e:
-        print("====== ОШИБКА GEMINI ======")
+        print("====== 5. КРИТИЧЕСКАЯ ОШИБКА СЕРВЕРА ======")
         print(repr(e))
         return {"recipes": []}
 
-# РОУТ 2: Отправка сообщения обратно в Telegram бота
 @app.post("/api/send-to-bot")
 async def send_to_bot(request: SendToBotRequest):
-    if not BOT_TOKEN:
-        return {"success": False, "error": "Токен бота не настроен на сервере (BOT_TOKEN)"}
-    
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": request.user_id,
-        "text": request.text,
-        "parse_mode": "Markdown"
-    }
-    
+    payload = {"chat_id": request.user_id, "text": request.text, "parse_mode": "Markdown"}
     try:
         resp = requests.post(url, json=payload)
         return {"success": resp.ok}
