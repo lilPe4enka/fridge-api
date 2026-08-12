@@ -7,7 +7,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 # Вставьте сюда токен, полученный от @BotFather
 BOT_TOKEN = "8972987041:AAHTwVh2FP0Z6L0IAhJbceSODGHXeA1cy-0"
 # Ссылка на ваш Frontend (пока можно поставить любую для теста)
-WEB_APP_URL = "https://heartfelt-marshmallow-bd176b.netlify.app/?v=4"
+WEB_APP_URL = "https://heartfelt-marshmallow-bd176b.netlify.app/?v=5"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
