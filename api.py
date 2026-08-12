@@ -39,7 +39,6 @@ class SendToBotRequest(BaseModel):
 async def root():
     return {"status": "ok", "message": "API работает отлично!"}
 
-# РОУТ 1: Поиск рецептов ПРЯМЫМ запросом к API (Без библиотек Google)
 @app.post("/api/find-recipes")
 async def find_recipes(request: IngredientsRequest):
     user_ingredients = [INGREDIENTS_MAP[i] for i in request.ingredient_ids if i in INGREDIENTS_MAP]
@@ -61,8 +60,8 @@ async def find_recipes(request: IngredientsRequest):
     - "macros": объект с ключами "kcal", "protein", "fat", "carbs"
     """
 
-    # Прямая ссылка на API Gemini 1.5 Flash
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    # Прямая ссылка на актуальную модель Gemini 3.6 Flash
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"responseMimeType": "application/json"}
@@ -91,7 +90,6 @@ async def find_recipes(request: IngredientsRequest):
         print(repr(e))
         return {"recipes": []}
 
-# РОУТ 2: Отправка сообщения обратно в Telegram бота
 @app.post("/api/send-to-bot")
 async def send_to_bot(request: SendToBotRequest):
     if not BOT_TOKEN:
