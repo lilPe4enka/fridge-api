@@ -116,7 +116,6 @@
       tg.ready();
       tg.expand();
 
-      // РАСШИРЕННЫЙ СПИСОК ПРОДУКТОВ (без помидоров)
       const AVAILABLE_INGREDIENTS = [
         { id: 1, name: "Яйца 🥚" },
         { id: 3, name: "Масло 🧈" },
@@ -130,7 +129,6 @@
         { id: 11, name: "Морковь 🥕" },
         { id: 12, name: "Чеснок 🧄" },
         { id: 13, name: "Рис 🍚" },
-        { id: 14, name: "Грибы 🍄" },
         { id: 15, name: "Мясной фарш 🥩" },
         { id: 16, name: "Сметана 🥣" },
         { id: 17, name: "Капуста 🥬" },
@@ -138,6 +136,9 @@
         { id: 19, name: "Огурцы 🥒" },
         { id: 20, name: "Зелень 🌿" },
         { id: 21, name: "Ветчина 🥓" },
+        { id: 22, name: "Свинина 🥩" }, // Новое
+        { id: 23, name: "Гречка 🟤" }, // Новое
+        { id: 24, name: "Говядина 🥩" }, // Новое
       ];
 
       let selectedIngredients = new Set();
@@ -218,7 +219,7 @@
 
         if (recipes.length === 0) {
           listContainer.innerHTML =
-            '<p style="text-align:center;">Ничего не найдено 😔 Попробуйте выбрать больше продуктов.</p>';
+            '<p style="text-align:center;">Ничего не найдено 😔</p>';
           return;
         }
 
@@ -226,20 +227,20 @@
           const card = document.createElement("div");
           card.className = "recipe-card";
 
-          // Формируем HTML для шагов
-          const stepsHtml = recipe.steps
+          const stepsHtml = (recipe.steps || [])
             .map((step) => `<li>${step}</li>`)
             .join("");
 
+          // Проверяем, есть ли недостающие продукты
+          const missingText =
+            recipe.missing_ingredients && recipe.missing_ingredients.length > 0
+              ? `<div class="recipe-match" style="color: #e53935; margin-top: 4px;">Нужно докупить: ${recipe.missing_ingredients.join(", ")}</div>`
+              : `<div class="recipe-match" style="color: #43a047; margin-top: 4px;">Все продукты есть!</div>`;
+
           card.innerHTML = `
                     <div class="recipe-title">${recipe.name}</div>
-                    <div class="recipe-match">Совпадение: ${recipe.match_percentage}%</div>
-                    ${
-                      recipe.missing_ingredient_ids.length > 0
-                        ? `<div class="recipe-match" style="color: #e53935; margin-top: 4px;">Нужно докупить ингредиентов: ${recipe.missing_ingredient_ids.length} шт.</div>`
-                        : `<div class="recipe-match" style="color: #43a047; margin-top: 4px;">Все продукты есть!</div>`
-                    }
-                    <!-- Выпадающий список с шагами приготовления -->
+                    <div class="recipe-match">Совпадение: ~${recipe.match_percentage}%</div>
+                    ${missingText}
                     <details>
                         <summary>Показать рецепт 📖</summary>
                         <ol>${stepsHtml}</ol>
