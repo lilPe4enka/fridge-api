@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Обязательный тег для корректного отображения на мобильных устройствах -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Что в холодильнике?</title>
+
+    <!-- Подключаем библиотеку Telegram Web App -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <style>
+      /* Используем системные цвета Telegram для бесшовного дизайна */
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background-color: var(--tg-theme-bg-color, #ffffff);
+        color: var(--tg-theme-text-color, #000000);
+        margin: 0;
+        padding: 16px;
+      }
+
+      h2 {
+        margin-top: 0;
+      }
+
+      /* Стили для списка ингредиентов */
+      .ingredient-label {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        margin-bottom: 8px;
+        background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        border-radius: 10px;
+        cursor: pointer;
+      }
+
+      .ingredient-label input[type="checkbox"] {
+        margin-right: 12px;
+        transform: scale(1.3);
+      }
+
+      /* Стили для карточек рецептов */
+      .recipe-card {
+        background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+      }
+
+      .recipe-title {
+        font-weight: bold;
+        font-size: 18px;
+        margin-bottom: 8px;
+      }
+
+      .recipe-match {
+        color: var(--tg-theme-hint-color, #999999);
+        font-size: 14px;
+      }
+
+      /* Утилита для скрытия экранов */
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ЭКРАН 1: Выбор продуктов -->
+    <div id="ingredients-screen">
+      <h2>Что есть в холодильнике? 🧊</h2>
+      <div id="ingredients-list">
+        <!-- Сюда с помощью JS будут добавляться чекбоксы -->
+      </div>
+    </div>
+
+    <!-- ЭКРАН 2: Результаты (скрыт по умолчанию) -->
+    <div id="recipes-screen" class="hidden">
+      <h2>Подходящие рецепты 🍳</h2>
+      <div id="recipes-list">
+        <!-- Сюда будут добавляться найденные рецепты -->
+      </div>
+      <button
+        onclick="showIngredientsScreen()"
+        style="margin-top: 16px; padding: 10px; width: 100%"
+      >
+        Выбрать другие продукты
+      </button>
+    </div>
+
+    <script>
+      // Инициализируем Telegram Web App API
+      const tg = window.Telegram.WebApp;
+
+      // Сообщаем Telegram, что приложение готово, и разворачиваем его на весь экран
+      tg.ready();
+      tg.expand();
+
+      // Моковые данные продуктов (позже их можно тоже получать с бэкенда)
+      const AVAILABLE_INGREDIENTS = [
+        { id: 1, name: "Яйца 🥚" },
+        { id: 2, name: "Помидоры 🍅" },
+        { id: 3, name: "Масло 🧈" },
+        { id: 4, name: "Мука 🌾" },
+        { id: 5, name: "Картошка 🥔" },
+        { id: 6, name: "Лук 🧅" },
+      ];
+
+      let selectedIngredients = new Set();
+
+      // 1. Функция рендера списка ингредиентов
+      function renderIngredients() {
+        const listContainer = document.getElementById("ingredients-list");
+
+        AVAILABLE_INGREDIENTS.forEach((ingredient) => {
+          const label = document.createElement("label");
+          label.className = "ingredient-label";
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.value = ingredient.id;
+
+          // Обработчик клика по чекбоксу
+          checkbox.addEventListener("change", (e) => {
+            if (e.target.checked) {
+              selectedIngredients.add(ingredient.id);
+            } else {
+              selectedIngredients.delete(ingredient.id);
+            }
+            updateMainButton();
+          });
+
+          label.appendChild(checkbox);
+          label.appendChild(document.createTextNode(ingredient.name));
+          listContainer.appendChild(label);
+        });
+      }
+
+      // 2. Управление главной кнопкой Telegram
+      function updateMainButton() {
+        if (selectedIngredients.size > 0) {
+          tg.MainButton.text = `Найти рецепты (${selectedIngredients.size})`;
+          tg.MainButton.show();
+        } else {
+          tg.MainButton.hide();
+        }
+      }
+
+      // Обрабатываем нажатие на MainButton
+      tg.MainButton.onClick(async () => {
+        // Если мы уже на экране результатов, кнопка может делать что-то другое (или скрываться)
+        if (
+          !document
+            .getElementById("recipes-screen")
+            .classList.contains("hidden")
+        ) {
+          return;
+        }
+
+        // Показываем крутилку загрузки на кнопке
+        tg.MainButton.showProgress();
+
+        try {
+          // Отправляем запрос на ваш Python Backend
+          // ВАЖНО: Замените URL на адрес вашего сервера!
+          // Для локального тестирования используйте ngrok, так как Telegram требует HTTPS.
+          const response = await fetch(
+            "https://ВАШ_СЕРВЕР.com/api/find-recipes",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                ingredient_ids: Array.from(selectedIngredients),
+              }),
+            },
+          );
+
+          const data = await response.json();
+          renderRecipes(data.recipes);
+
+          // Переключаем экраны
+          document.getElementById("ingredients-screen").classList.add("hidden");
+          document.getElementById("recipes-screen").classList.remove("hidden");
+
+          // Скрываем MainButton на экране результатов
+          tg.MainButton.hide();
+        } catch (error) {
+          tg.showAlert(
+            "Произошла ошибка при поиске рецептов. Попробуйте позже.",
+          );
+          console.error(error);
+        } finally {
+          tg.MainButton.hideProgress();
+        }
+      });
+
+      // 3. Функция рендера результатов
+      function renderRecipes(recipes) {
+        const listContainer = document.getElementById("recipes-list");
+        listContainer.innerHTML = ""; // Очищаем старые результаты
+
+        if (recipes.length === 0) {
+          listContainer.innerHTML =
+            "<p>Ничего не найдено. Попробуйте выбрать больше продуктов.</p>";
+          return;
+        }
+
+        recipes.forEach((recipe) => {
+          const card = document.createElement("div");
+          card.className = "recipe-card";
+
+          card.innerHTML = `
+                    <div class="recipe-title">${recipe.name}</div>
+                    <div class="recipe-match">Совпадение: ${recipe.match_percentage}%</div>
+                    ${
+                      recipe.missing_ingredient_ids.length > 0
+                        ? `<div class="recipe-match" style="color: #e53935; margin-top: 4px;">Нужно докупить ингредиентов: ${recipe.missing_ingredient_ids.length} шт.</div>`
+                        : `<div class="recipe-match" style="color: #43a047; margin-top: 4px;">Все продукты есть!</div>`
+                    }
+                `;
+          listContainer.appendChild(card);
+        });
+      }
+
+      // Функция возврата на экран выбора
+      function showIngredientsScreen() {
+        document.getElementById("recipes-screen").classList.add("hidden");
+        document
+          .getElementById("ingredients-screen")
+          .classList.remove("hidden");
+        updateMainButton();
+      }
+
+      // Запускаем рендер при загрузке страницы
+      renderIngredients();
+    </script>
+  </body>
+</html>
