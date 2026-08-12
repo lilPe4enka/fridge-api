@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 from google import genai
-from google.genai import types
 
 app = FastAPI()
 
@@ -20,7 +19,7 @@ app.add_middleware(
 # Берем ключ API из настроек сервера
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
-# Инициализируем клиент по новому стандарту
+# Инициализируем клиент по новому стандарту 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # Словарь продуктов
@@ -55,16 +54,20 @@ async def find_recipes(request: IngredientsRequest):
     """
 
     try:
-        # Обращаемся к Gemini через новую библиотеку
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-            )
+        # Используем современный Interactions API и самую новую модель 3.6-flash
+        interaction = client.interactions.create(
+            model="gemini-3.6-flash",
+            input=prompt,
+            response_format={
+                "type": "text",
+                "mime_type": "application/json"
+            }
         )
         
-        raw_text = response.text.strip()
+        # Получаем текст ответа
+        raw_text = interaction.output_text.strip()
+        
+        # На всякий случай очищаем от markdown-разметки (```json ... ```)
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         if raw_text.endswith("```"):
