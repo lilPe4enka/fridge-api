@@ -196,7 +196,7 @@
           document.getElementById("recipes-screen").classList.remove("hidden");
           tg.MainButton.hide();
         } catch (error) {
-          tg.showAlert("Ошибка связи с сервером.");
+          tg.showAlert("Ошибка: " + error.message);
         } finally {
           tg.MainButton.hideProgress();
         }
