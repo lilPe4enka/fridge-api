@@ -41,8 +41,14 @@ async def root():
 
 @app.post("/api/find-recipes")
 async def find_recipes(request: IngredientsRequest):
+    print("\n====== 1. ПРИШЕЛ ЗАПРОС ОТ ПРИЛОЖЕНИЯ ======")
+    print(f"Полученные ID: {request.ingredient_ids}")
+    
     user_ingredients = [INGREDIENTS_MAP[i] for i in request.ingredient_ids if i in INGREDIENTS_MAP]
+    print(f"Распознанные продукты: {user_ingredients}")
+    
     if not user_ingredients:
+        print("====== ОШИБКА: СПИСОК ПРОДУКТОВ ПУСТ ======")
         return {"recipes": []}
 
     time_text = "Любое время." if request.time_limit == "any" else f"Максимальное время готовки: {request.time_limit} минут."
@@ -60,48 +66,43 @@ async def find_recipes(request: IngredientsRequest):
     - "macros": объект с ключами "kcal", "protein", "fat", "carbs"
     """
 
-    # Прямая ссылка на актуальную модель Gemini 3.6 Flash
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"responseMimeType": "application/json"}
     }
 
+    print("====== 2. ОТПРАВЛЯЕМ ЗАПРОС В GOOGLE ======")
     try:
         response = requests.post(url, json=payload)
+        print(f"Статус ответа Google: {response.status_code}")
+        
         data = response.json()
         
-        # Если ответ успешный, достаем текст
         if "candidates" in data:
+            print("====== 3. GOOGLE УСПЕШНО ВЕРНУЛ РЕЦЕПТЫ ======")
             raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
             
-            # Очистка маркдауна
             if raw_text.startswith("```json"): raw_text = raw_text[7:]
             if raw_text.endswith("```"): raw_text = raw_text[:-3]
                 
-            return {"recipes": json.loads(raw_text.strip())}
+            recipes = json.loads(raw_text.strip())
+            print(f"Сгенерировано рецептов: {len(recipes)}")
+            return {"recipes": recipes}
         else:
-            print("====== ОТВЕТ С ОШИБКОЙ ОТ GOOGLE ======")
+            print("====== 4. ОШИБКА В ОТВЕТЕ GOOGLE ======")
             print(data)
             return {"recipes": []}
             
     except Exception as e:
-        print("====== ОШИБКА СЕРВЕРА ======")
+        print("====== 5. КРИТИЧЕСКАЯ ОШИБКА СЕРВЕРА ======")
         print(repr(e))
         return {"recipes": []}
 
 @app.post("/api/send-to-bot")
 async def send_to_bot(request: SendToBotRequest):
-    if not BOT_TOKEN:
-        return {"success": False, "error": "Токен бота не настроен на сервере"}
-    
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": request.user_id,
-        "text": request.text,
-        "parse_mode": "Markdown"
-    }
-    
+    payload = {"chat_id": request.user_id, "text": request.text, "parse_mode": "Markdown"}
     try:
         resp = requests.post(url, json=payload)
         return {"success": resp.ok}
