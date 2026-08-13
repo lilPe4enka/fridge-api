@@ -1,7 +1,7 @@
 import asyncio
-from aiogram import Bot, Dispatcher
-from aiogram.filters import CommandStart
-from aiogram.types import Message, WebAppInfo
+from aiogram import Bot, Dispatcher, F
+from aiogram.filters import CommandStart, Command
+from aiogram.types import Message, CallbackQuery, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # Вставьте сюда токен, полученный от @BotFather
