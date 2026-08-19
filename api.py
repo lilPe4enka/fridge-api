@@ -111,7 +111,7 @@ async def find_recipes(req: RecipeRequest):
     
     try:
         # Новый рекомендуемый метод вызова Gemini через Chat
-        chat = await ai_client.aio.chats.create(
+        chat = ai_client.aio.chats.create(
             model='gemini-3.6-flash',
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
