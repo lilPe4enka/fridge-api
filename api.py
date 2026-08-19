@@ -139,7 +139,13 @@ async def find_recipes(req: RecipeRequest):
 @app.post("/api/send-to-bot")
 async def send_to_bot(req: SendBotRequest):
     try:
-        await bot.send_message(chat_id=req.user_id, text=req.text, parse_mode="Markdown")
+        # Создаем временного бота внутри функции для защиты от обрыва сессий
+        temp_bot = Bot(token=BOT_TOKEN)
+        
+        # Используем надежный HTML вместо капризного Markdown
+        await temp_bot.send_message(chat_id=req.user_id, text=req.text, parse_mode="HTML")
+        await temp_bot.session.close() # Закрываем соединение
+        
         return {"success": True}
     except Exception as e:
         print("❌ Ошибка отправки в бота:", str(e))
