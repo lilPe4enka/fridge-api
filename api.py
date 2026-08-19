@@ -125,7 +125,7 @@ async def find_recipes(req: RecipeRequest):
     try:
         # Асинхронный вызов Gemini с требованием JSON-ответа
         response = await ai_client.aio.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-2.0-flash',
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
