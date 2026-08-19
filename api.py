@@ -6,6 +6,7 @@ from typing import List, Optional
 from aiogram import Bot
 from google import genai
 from google.genai import types
+import os
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
