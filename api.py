@@ -1,102 +1,152 @@
-import os
 import json
-import requests
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
+from aiogram import Bot
+from google import genai
+from google.genai import types
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
 app = FastAPI()
 
+# Разрешаем CORS, чтобы Web App (с GitHub Pages) мог обращаться к API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+bot = Bot(token=BOT_TOKEN)
+ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
+# ДЕТАЛИЗИРОВАННЫЙ И РАСШИРЕННЫЙ СПИСОК ПРОДУКТОВ
 INGREDIENTS_MAP = {
-    1: "Яйца", 3: "Масло", 4: "Мука", 5: "Картошка", 6: "Лук",
-    7: "Курица", 8: "Макароны", 9: "Сыр", 10: "Молоко", 11: "Морковь",
-    12: "Чеснок", 13: "Рис", 15: "Мясной фарш", 16: "Сметана",
-    17: "Капуста", 18: "Болгарский перец", 19: "Огурцы", 20: "Зелень",
-    21: "Ветчина", 22: "Свинина", 23: "Гречка", 24: "Говядина"
+    # Яйца, молочка и сыры
+    1: "Яйца", 3: "Сливочное масло", 9: "Твердый сыр", 10: "Молоко",
+    16: "Сметана", 27: "Сливки", 33: "Творог", 42: "Кефир", 53: "Сгущенка",
+    68: "Моцарелла / Сыр для пиццы", 69: "Плавленый сырок",
+
+    # Курица и птица
+    54: "Куриное филе (грудка)", 55: "Куриные бедра / голени", 
+    56: "Куриные крылышки", 57: "Целая курица",
+
+    # Свинина и говядина
+    58: "Свиная шея / мякоть", 59: "Свиная вырезка / карбонад", 60: "Свиные ребрышки",
+    61: "Говяжья мякоть / вырезка", 62: "Говяжий стейк",
+
+    # Фарш
+    63: "Куриный фарш", 64: "Говяжий фарш", 65: "Свиной фарш", 
+    66: "Домашний фарш (свинина + говядина)",
+
+    # Мясные изделия и колбасы
+    21: "Ветчина", 28: "Бекон", 35: "Сосиски / Сардельки", 44: "Колбаса (вареная/копченая)",
+
+    # Рыба и морепродукты
+    29: "Красная рыба (лосось/форель)", 30: "Креветки", 46: "Крабовые палочки",
+    50: "Рыбные консервы / Тунец", 67: "Белая рыба (минтай/треска)",
+
+    # Овощи, грибы и зелень
+    5: "Картошка", 6: "Лук репчатый", 11: "Морковь", 12: "Чеснок", 17: "Капуста белокочанная",
+    18: "Болгарский перец", 19: "Свежие огурцы", 20: "Зелень (укроп/петрушка)", 25: "Помидоры",
+    26: "Грибы (шампиньоны)", 37: "Брокколи / Цветная капуста", 70: "Кабачки / Цукини",
+    71: "Баклажаны", 72: "Свекла", 73: "Зеленый лук", 75: "Соленые / маринованные огурцы",
+
+    # Бакалея, крупы и мучное
+    4: "Мука", 8: "Макароны / Спагетти", 13: "Рис", 23: "Гречка", 34: "Хлеб / Батон",
+    41: "Овсянка / Геркулес", 45: "Пельмени / Вареники", 49: "Замороженные овощи",
+    74: "Лаваш / Тортилья",
+
+    # Консервы, соусы и заправки
+    31: "Лимон", 32: "Яблоки", 36: "Консервированная фасоль", 38: "Майонез",
+    39: "Томатная паста / Кетчуп", 40: "Растительное масло", 43: "Соевый соус",
+    47: "Консервированная кукуруза", 48: "Консервированный горошек", 51: "Горчица",
+    52: "Сахар", 76: "Мёд"
 }
 
-class IngredientsRequest(BaseModel):
+# --- МОДЕЛИ ДАННЫХ ---
+class RecipeRequest(BaseModel):
     ingredient_ids: List[int]
+    excluded_ids: Optional[List[int]] = []
     time_limit: str
 
-class SendToBotRequest(BaseModel):
+class SendBotRequest(BaseModel):
     user_id: int
     text: str
 
-@app.get("/")
-async def root():
-    return {"status": "ok", "message": "API работает отлично!"}
+# --- СИСТЕМНЫЙ ПРОМПТ НЕЙРОСЕТИ ---
+SYSTEM_PROMPT = """
+Ты — профессиональный шеф-повар. 
+СТРОГИЕ ПРАВИЛА:
+1. Указывай точные граммовки (г, мл) для КАЖДОГО ингредиента (даже для соли и специй).
+2. Шаги должны содержать точное время (в минутах) и температуру готовки.
+3. Если есть запрещенные продукты — категорически не используй их и не предлагай их аналоги, если они похожи на оригинал.
+4. Если нужны продукты вне списка пользователя, добавь их в missing_ingredients.
+
+Ты ДОЛЖЕН вернуть ответ СТРОГО в формате JSON по этой структуре:
+{
+  "recipes": [
+    {
+      "name": "Название блюда",
+      "time": "Время (например: 30)",
+      "macros": {"kcal": 450, "protein": 30, "fat": 20, "carbs": 40},
+      "missing_ingredients": ["Сливки - 100 мл", "Соль - 5 г"],
+      "steps": [
+        "1. Нарежьте куриное филе (200 г) кубиками.",
+        "2. Обжаривайте 5 минут на сильном огне."
+      ]
+    }
+  ]
+}
+Верни ТОЛЬКО валидный JSON, без маркдауна ```json ... ```.
+"""
 
 @app.post("/api/find-recipes")
-async def find_recipes(request: IngredientsRequest):
-    print("\n====== 1. ПРИШЕЛ ЗАПРОС ОТ ПРИЛОЖЕНИЯ ======")
-    user_ingredients = [INGREDIENTS_MAP[i] for i in request.ingredient_ids if i in INGREDIENTS_MAP]
+async def find_recipes(req: RecipeRequest):
+    # Преобразуем ID в названия продуктов
+    user_ingredients = [INGREDIENTS_MAP[i] for i in req.ingredient_ids if i in INGREDIENTS_MAP]
+    excluded_ingredients = [INGREDIENTS_MAP[i] for i in req.excluded_ids if i in INGREDIENTS_MAP]
     
-    if not user_ingredients:
-        return {"recipes": []}
-
-    time_text = "Любое время." if request.time_limit == "any" else f"Максимальное время готовки: {request.time_limit} минут."
+    ing_text = ", ".join(user_ingredients)
+    time_text = "Любое" if req.time_limit == "any" else f"до {req.time_limit} минут"
     
-    prompt = f"""
-    Пользователь имеет: {', '.join(user_ingredients)}.
-    {time_text}
-    Придумай5-6 вкусных рецепта. Можно добавлять 1-2 простых ингредиента. Специи не в счёт.
-    Верни ответ СТРОГО в формате JSON - массив объектов:
-    - "name": строка (название с эмодзи)
-    - "match_percentage": число 
-    - "missing_ingredients": массив строк 
-    - "steps": массив строк 
-    - "time": строка 
-    - "macros": объект с ключами "kcal", "protein", "fat", "carbs"
-    """
-
-    # ИСПОЛЬЗУЕМ АКТУАЛЬНУЮ И РАБОЧУЮ МОДЕЛЬ
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json"}
-    }
-
+    # Формируем запрос
+    user_prompt = f"У меня есть: {ing_text}. Время: {time_text}."
+    if excluded_ingredients:
+        user_prompt += f"\nКАТЕГОРИЧЕСКИ НЕ ИСПОЛЬЗОВАТЬ (даже в missing_ingredients): {', '.join(excluded_ingredients)}."
+    
+    user_prompt += "\nПридумай 2-3 рецепта."
+    
     try:
-        response = requests.post(url, json=payload)
-        data = response.json()
-        
-        if "candidates" in data:
-            print("====== 3. GOOGLE УСПЕШНО ВЕРНУЛ РЕЦЕПТЫ ======")
-            raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            
-            if raw_text.startswith("```json"): raw_text = raw_text[7:]
-            if raw_text.endswith("```"): raw_text = raw_text[:-3]
-                
-            return {"recipes": json.loads(raw_text.strip())}
-        else:
-            print("====== 4. ОШИБКА В ОТВЕТЕ GOOGLE ======")
-            print(data)
-            return {"recipes": []}
-            
+        # Асинхронный вызов Gemini с требованием JSON-ответа
+        response = await ai_client.aio.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.4,
+                response_mime_type="application/json",
+            )
+        )
+        # Парсим JSON и отправляем на фронтенд
+        return json.loads(response.text)
+
     except Exception as e:
-        print("====== 5. КРИТИЧЕСКАЯ ОШИБКА СЕРВЕРА ======")
-        print(repr(e))
+        print("Ошибка при генерации рецепта:", e)
+        # Отдаем пустой массив в случае ошибки, чтобы интерфейс не завис
         return {"recipes": []}
+
 
 @app.post("/api/send-to-bot")
-async def send_to_bot(request: SendToBotRequest):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": request.user_id, "text": request.text, "parse_mode": "Markdown"}
+async def send_to_bot(req: SendBotRequest):
     try:
-        resp = requests.post(url, json=payload)
-        return {"success": resp.ok}
+        # Отправляем сообщение от имени бота в личные сообщения пользователю
+        await bot.send_message(chat_id=req.user_id, text=req.text, parse_mode="Markdown")
+        return {"success": True}
     except Exception as e:
+        print("Ошибка отправки в бота:", e)
         return {"success": False, "error": str(e)}
