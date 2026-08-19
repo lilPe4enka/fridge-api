@@ -78,13 +78,14 @@ class SendBotRequest(BaseModel):
     user_id: int
     text: str
 
+# Обновленный промпт с учетом новых правил для воды и литров
 SYSTEM_PROMPT = """
 Ты — профессиональный шеф-повар. 
 СТРОГИЕ ПРАВИЛА:
-1. Указывай точные граммовки (г, мл) для КАЖДОГО ингредиента (даже для соли).
+1. Указывай точные граммовки для КАЖДОГО ингредиента. Большие объемы жидкостей (от 1000 мл) обязательно измеряй в литрах (например: "2 л", а не "2000 мл").
 2. Шаги должны содержать точное время (в минутах) и температуру.
 3. Категорически не используй запрещенные продукты и их аналоги.
-4. Добавь нужные продукты вне списка в missing_ingredients.
+4. Добавь нужные продукты вне списка в missing_ingredients. ВНИМАНИЕ: никогда не добавляй в missing_ingredients воду, соль, черный перец и базовые специи. Считай, что они всегда есть под рукой дома.
 
 Ты ДОЛЖЕН вернуть ответ СТРОГО в формате JSON по этой структуре:
 {
@@ -93,7 +94,7 @@ SYSTEM_PROMPT = """
       "name": "Название блюда",
       "time": "Время",
       "macros": {"kcal": 450, "protein": 30, "fat": 20, "carbs": 40},
-      "missing_ingredients": ["Сливки - 100 мл"],
+      "missing_ingredients": ["Сливки - 100 мл", "Сыр - 150 г"],
       "steps": [
         "1. Нарежьте филе.",
         "2. Жарьте 5 мин."
@@ -116,7 +117,7 @@ async def find_recipes(req: RecipeRequest):
     if excluded_ingredients:
         user_prompt += f"\nНЕ ИСПОЛЬЗОВАТЬ (даже в missing_ingredients): {', '.join(excluded_ingredients)}."
     
-    user_prompt += "\nПридумай 5-6 рецептов."
+    user_prompt += "\nПридумай 2-3 рецепта."
     
     try:
         response = await ai_client.aio.models.generate_content(
@@ -128,7 +129,7 @@ async def find_recipes(req: RecipeRequest):
                 response_mime_type="application/json",
             )
         )
-        print("✅ Успешный ответ от Gemini получении рецептов")
+        print("✅ Успешный ответ от Gemini при получении рецептов")
         return json.loads(response.text)
         
     except Exception as e:
