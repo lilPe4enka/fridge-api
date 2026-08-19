@@ -110,15 +110,18 @@ async def find_recipes(req: RecipeRequest):
     user_prompt += "Придумай 8-10 рецептов."
     
     try:
-        response = await ai_client.aio.models.generate_content(
+        # Новый рекомендуемый метод вызова Gemini через Chat
+        chat = await ai_client.aio.chats.create(
             model='gemini-3.6-flash',
-            contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0.4,
                 response_mime_type="application/json",
             )
         )
+        response = await chat.send_message(user_prompt)
+        
+        print("✅ Успешный ответ от Gemini")
         return json.loads(response.text)
     except Exception as e:
         print("❌ ОШИБКА ГЕНЕРАЦИИ:", str(e))
