@@ -2,243 +2,132 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Что в холодильнике?</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
       body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-          Arial, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         background-color: var(--tg-theme-bg-color, #ffffff);
         color: var(--tg-theme-text-color, #000000);
-        margin: 0;
-        padding: 20px 16px;
+        margin: 0; padding: 20px 16px;
       }
-
-      h2,
-      h3 {
-        text-align: center;
-        margin-top: 0;
+      h2, h3 { text-align: center; margin-top: 0; }
+      .instruction-text { text-align: center; font-size: 13px; color: var(--tg-theme-hint-color, #999); margin-bottom: 16px; }
+      
+      .time-filters { display: flex; gap: 8px; justify-content: center; margin-bottom: 24px; }
+      .time-btn { background-color: var(--tg-theme-secondary-bg-color, #f0f0f0); color: var(--tg-theme-text-color, #000000); border: none; padding: 8px 14px; border-radius: 16px; font-weight: bold; cursor: pointer; }
+      .time-btn.active { background-color: var(--tg-theme-button-color, #3390ec); color: #fff; }
+      
+      /* НОВОЕ: СТИЛИ ДЛЯ ПОИСКА И КАТЕГОРИЙ */
+      .search-box {
+        width: 100%;
+        padding: 12px 16px;
+        margin-bottom: 12px;
+        border-radius: 14px;
+        border: 1px solid var(--tg-theme-hint-color, #ccc);
+        background-color: var(--tg-theme-bg-color, #fff);
+        color: var(--tg-theme-text-color, #000);
+        font-size: 16px;
+        box-sizing: border-box;
+        outline: none;
       }
-
-      /* Блок выбора времени */
-      .time-filters {
+      
+      .category-tabs {
         display: flex;
         gap: 8px;
-        justify-content: center;
-        margin-bottom: 24px;
+        overflow-x: auto;
+        padding-bottom: 10px;
+        margin-bottom: 16px;
+        white-space: nowrap;
+        /* Скрываем скроллбар для красоты */
+        -ms-overflow-style: none;  
+        scrollbar-width: none;  
       }
-      .time-btn {
+      .category-tabs::-webkit-scrollbar { display: none; }
+      
+      .cat-btn {
         background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
         color: var(--tg-theme-text-color, #000000);
         border: none;
         padding: 8px 14px;
-        border-radius: 16px;
-        font-weight: bold;
-        cursor: pointer;
-      }
-      .time-btn.active {
-        background-color: var(--tg-theme-button-color, #3390ec);
-        color: #fff;
-      }
-
-      /* Плитки продуктов */
-      #ingredients-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        justify-content: center;
-      }
-      .ingredient-tile {
-        background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
-        padding: 10px 16px;
-        border-radius: 20px;
-        font-size: 15px;
+        border-radius: 12px;
+        font-size: 14px;
         font-weight: 500;
         cursor: pointer;
-        user-select: none;
-        transition: 0.2s;
-        -webkit-tap-highlight-color: transparent;
       }
-      .ingredient-tile.selected {
-        background-color: var(--tg-theme-button-color, #3390ec);
-        color: #fff;
-        transform: scale(1.05);
-      }
+      .cat-btn.active { background-color: var(--tg-theme-button-color, #3390ec); color: #fff; }
 
-      /* Рецепты */
-      .recipe-card {
-        background-color: var(--tg-theme-secondary-bg-color, #f0f0f0);
-        border-radius: 16px;
-        padding: 18px;
-        margin-bottom: 16px;
-        position: relative;
-      }
-      .recipe-title {
-        font-weight: 700;
-        font-size: 19px;
-        margin-bottom: 8px;
-        padding-right: 40px;
-      }
+      #ingredients-list { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; }
+      
+      /* Плитки и 3 состояния */
+      .ingredient-tile { background-color: var(--tg-theme-secondary-bg-color, #f0f0f0); padding: 10px 16px; border-radius: 20px; font-size: 15px; font-weight: 500; cursor: pointer; user-select: none; transition: 0.2s; -webkit-tap-highlight-color: transparent; }
+      .ingredient-tile.included { background-color: var(--tg-theme-button-color, #3390ec); color: #fff; transform: scale(1.05); }
+      .ingredient-tile.excluded { background-color: #ff3b30; color: #fff; text-decoration: line-through; transform: scale(0.95); opacity: 0.8; }
 
-      /* КБЖУ и Время */
-      .badges-row {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-bottom: 12px;
-      }
-      .badge {
-        background: rgba(0, 0, 0, 0.05);
-        padding: 4px 8px;
-        border-radius: 8px;
-        font-size: 12px;
-        font-weight: bold;
-      }
-      .badge.time {
-        background: #ffe0b2;
-        color: #e65100;
-      }
-
-      /* Шаги */
-      details {
-        margin-top: 14px;
-        background: rgba(0, 0, 0, 0.03);
-        padding: 10px;
-        border-radius: 12px;
-      }
-      summary {
-        color: var(--tg-theme-link-color, #3390ec);
-        font-weight: 600;
-        outline: none;
-      }
-      ol {
-        padding-left: 20px;
-        margin-top: 10px;
-        font-size: 14px;
-      }
-
-      /* Кнопки действий в карточке */
-      .action-buttons {
-        display: flex;
-        gap: 8px;
-        margin-top: 14px;
-      }
-      .action-btn {
-        flex: 1;
-        border: none;
-        padding: 10px;
-        border-radius: 10px;
-        font-size: 13px;
-        font-weight: bold;
-        cursor: pointer;
-        background-color: var(--tg-theme-button-color, #3390ec);
-        color: #fff;
-      }
-      .action-btn.secondary {
-        background-color: rgba(0, 0, 0, 0.1);
-        color: var(--tg-theme-text-color);
-      }
-      .fav-btn {
-        position: absolute;
-        top: 16px;
-        right: 16px;
-        background: none;
-        border: none;
-        font-size: 24px;
-        cursor: pointer;
-      }
-
-      /* Экран загрузки с котом */
-      #loading-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: var(--tg-theme-bg-color, #ffffff);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-      }
-      #loading-overlay img {
-        width: 200px;
-        border-radius: 20px;
-        margin-bottom: 20px;
-      }
-      #loading-overlay p {
-        font-size: 18px;
-        font-weight: bold;
-        text-align: center;
-      }
-
-      .hidden {
-        display: none !important;
-      }
-      .top-nav {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 20px;
-      }
-      .top-nav button {
-        background: none;
-        border: 1px solid var(--tg-theme-button-color);
-        color: var(--tg-theme-button-color);
-        padding: 6px 12px;
-        border-radius: 10px;
-        font-weight: bold;
-        cursor: pointer;
-      }
+      .recipe-card { background-color: var(--tg-theme-secondary-bg-color, #f0f0f0); border-radius: 16px; padding: 18px; margin-bottom: 16px; position: relative; }
+      .recipe-title { font-weight: 700; font-size: 19px; margin-bottom: 8px; padding-right: 40px; }
+      .badges-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+      .badge { background: rgba(0, 0, 0, 0.05); padding: 4px 8px; border-radius: 8px; font-size: 12px; font-weight: bold; }
+      .badge.time { background: #ffe0b2; color: #e65100; }
+      details { margin-top: 14px; background: rgba(0, 0, 0, 0.03); padding: 10px; border-radius: 12px; }
+      summary { color: var(--tg-theme-link-color, #3390ec); font-weight: 600; outline: none; }
+      ol { padding-left: 20px; margin-top: 10px; font-size: 14px; }
+      .action-buttons { display: flex; gap: 8px; margin-top: 14px; }
+      .action-btn { flex: 1; border: none; padding: 10px; border-radius: 10px; font-size: 13px; font-weight: bold; cursor: pointer; background-color: var(--tg-theme-button-color, #3390ec); color: #fff; }
+      .action-btn.secondary { background-color: rgba(0, 0, 0, 0.1); color: var(--tg-theme-text-color); }
+      .fav-btn { position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; cursor: pointer; }
+      #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--tg-theme-bg-color, #ffffff); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
+      #loading-overlay img { width: 200px; border-radius: 20px; margin-bottom: 20px; }
+      #loading-overlay p { font-size: 18px; font-weight: bold; text-align: center; }
+      .hidden { display: none !important; }
+      .top-nav { display: flex; justify-content: space-between; margin-bottom: 20px; }
+      .top-nav button { background: none; border: 1px solid var(--tg-theme-button-color); color: var(--tg-theme-button-color); padding: 6px 12px; border-radius: 10px; font-weight: bold; cursor: pointer; }
     </style>
   </head>
   <body>
-    <!-- ЭКРАН ЗАГРУЗКИ -->
     <div id="loading-overlay" class="hidden">
       <img src="cat.gif" alt="Кот готовит" />
-      <p>
-        Ищу самые вкусные рецепты...<br /><span
-          style="font-size: 14px; font-weight: normal; color: gray"
-          >Это займет пару секунд 🪄</span
-        >
-      </p>
+      <p>Ищу самые вкусные рецепты...<br /><span style="font-size: 14px; font-weight: normal; color: gray">Учитываю ваши пожелания 🪄</span></p>
     </div>
 
-    <!-- ЭКРАН 1: ВЫБОР -->
     <div id="ingredients-screen">
       <div class="top-nav">
-        <h2>Что в холодильнике?</h2>
+        <h2>Холодильник</h2>
         <button onclick="showFavorites()">❤️ Избранное</button>
       </div>
-
-      <h3>Сколько есть времени?</h3>
+      
+      <h3>Время готовки:</h3>
       <div class="time-filters">
         <button class="time-btn" onclick="setTime('15')">15 мин</button>
         <button class="time-btn" onclick="setTime('30')">30 мин</button>
-        <button class="time-btn active" onclick="setTime('any')">
-          Неважно
-        </button>
+        <button class="time-btn active" onclick="setTime('any')">Неважно</button>
+      </div>
+      
+      <p class="instruction-text">Нажмите 1 раз: <b>добавить</b>. Нажмите 2 раза: <b>исключить</b> 🚫.</p>
+
+      <!-- НОВОЕ: Поиск и Вкладки -->
+      <input type="text" id="searchInput" class="search-box" placeholder="🔍 Поиск (например: сыр, курица)" oninput="filterIngredients()">
+      
+      <div class="category-tabs">
+        <button class="cat-btn active" onclick="setCategory('all', this)">Все</button>
+        <button class="cat-btn" onclick="setCategory('meat', this)">🥩 Мясо и Птица</button>
+        <button class="cat-btn" onclick="setCategory('mince', this)">🥩 Фарш</button>
+        <button class="cat-btn" onclick="setCategory('sausage', this)">🌭 Колбасы</button>
+        <button class="cat-btn" onclick="setCategory('fish', this)">🐟 Рыба</button>
+        <button class="cat-btn" onclick="setCategory('dairy', this)">🥛 Молочка и Сыр</button>
+        <button class="cat-btn" onclick="setCategory('veg', this)">🥔 Овощи</button>
+        <button class="cat-btn" onclick="setCategory('grocery', this)">🍝 Бакалея</button>
+        <button class="cat-btn" onclick="setCategory('sauce', this)">🥫 Соусы и Добавки</button>
       </div>
 
       <div id="ingredients-list"></div>
     </div>
 
-    <!-- ЭКРАН 2: РЕЗУЛЬТАТЫ -->
     <div id="recipes-screen" class="hidden">
       <h2>Идеи для ужина 🍳</h2>
       <div id="recipes-list"></div>
-      <button
-        class="action-btn"
-        style="width: 100%; margin-top: 16px"
-        onclick="showIngredientsScreen()"
-      >
-        🔙 Выбрать другие продукты
-      </button>
+      <button class="action-btn" style="width: 100%; margin-top: 16px" onclick="showIngredientsScreen()">🔙 Выбрать другие продукты</button>
     </div>
 
     <script>
@@ -247,265 +136,318 @@
       tg.expand();
       tg.setHeaderColor("bg_color");
 
+      // Массив продуктов теперь содержит поле category
       const AVAILABLE_INGREDIENTS = [
-        { id: 1, name: "Яйца 🥚" },
-        { id: 3, name: "Масло 🧈" },
-        { id: 4, name: "Мука 🌾" },
-        { id: 5, name: "Картошка 🥔" },
-        { id: 6, name: "Лук 🧅" },
-        { id: 7, name: "Курица 🍗" },
-        { id: 8, name: "Макароны 🍝" },
-        { id: 9, name: "Сыр 🧀" },
-        { id: 10, name: "Молоко 🥛" },
-        { id: 11, name: "Морковь 🥕" },
-        { id: 12, name: "Чеснок 🧄" },
-        { id: 13, name: "Рис 🍚" },
-        { id: 15, name: "Мясной фарш 🥩" },
-        { id: 16, name: "Сметана 🥣" },
-        { id: 17, name: "Капуста 🥬" },
-        { id: 18, name: "Болгарский перец 🫑" },
-        { id: 19, name: "Огурцы 🥒" },
-        { id: 20, name: "Зелень 🌿" },
-        { id: 21, name: "Ветчина 🥓" },
-        { id: 22, name: "Свинина 🥩" },
-        { id: 23, name: "Гречка 🟤" },
-        { id: 24, name: "Говядина 🥩" },
+        // 🥩 Мясо и Птица (meat)
+        { id: 54, name: "Куриное филе 🍗", cat: "meat" }, { id: 55, name: "Бедра / Голени 🍗", cat: "meat" },
+        { id: 56, name: "Крылышки 🍗", cat: "meat" }, { id: 57, name: "Целая курица 🍗", cat: "meat" },
+        { id: 58, name: "Свиная шея 🥩", cat: "meat" }, { id: 59, name: "Свиная вырезка 🥩", cat: "meat" },
+        { id: 60, name: "Свиные ребра 🥩", cat: "meat" }, { id: 61, name: "Говядина мякоть 🥩", cat: "meat" },
+        { id: 62, name: "Стейк говяжий 🥩", cat: "meat" },
+
+        // 🥩 Фарш (mince)
+        { id: 63, name: "Куриный фарш 🥩", cat: "mince" }, { id: 64, name: "Говяжий фарш 🥩", cat: "mince" },
+        { id: 65, name: "Свиной фарш 🥩", cat: "mince" }, { id: 66, name: "Домашний фарш 🥩", cat: "mince" },
+
+        // 🌭 Колбасные изделия (sausage)
+        { id: 35, name: "Сосиски / Сардельки 🌭", cat: "sausage" }, { id: 44, name: "Колбаса 🥓", cat: "sausage" },
+        { id: 21, name: "Ветчина 🥓", cat: "sausage" }, { id: 28, name: "Бекон 🥓", cat: "sausage" },
+
+        // 🐟 Рыба и морепродукты (fish)
+        { id: 29, name: "Красная рыба 🐟", cat: "fish" }, { id: 67, name: "Белая рыба 🐟", cat: "fish" },
+        { id: 30, name: "Креветки 🍤", cat: "fish" }, { id: 46, name: "Краб. палочки 🦀", cat: "fish" },
+        { id: 50, name: "Рыб. консервы 🥫", cat: "fish" },
+
+        // 🥚 Молочка и Сыр (dairy)
+        { id: 1, name: "Яйца 🥚", cat: "dairy" }, { id: 9, name: "Твердый сыр 🧀", cat: "dairy" },
+        { id: 68, name: "Моцарелла 🧀", cat: "dairy" }, { id: 69, name: "Плавленый сырок 🧀", cat: "dairy" },
+        { id: 33, name: "Творог 🧀", cat: "dairy" }, { id: 10, name: "Молоко 🥛", cat: "dairy" },
+        { id: 16, name: "Сметана 🥣", cat: "dairy" }, { id: 27, name: "Сливки 🥛", cat: "dairy" },
+        { id: 42, name: "Кефир 🥛", cat: "dairy" }, { id: 3, name: "Слив. масло 🧈", cat: "dairy" },
+        { id: 53, name: "Сгущенка 🥫", cat: "dairy" },
+
+        // 🥔 Овощи и Зелень (veg)
+        { id: 5, name: "Картошка 🥔", cat: "veg" }, { id: 6, name: "Лук репчатый 🧅", cat: "veg" },
+        { id: 73, name: "Зеленый лук 🧅", cat: "veg" }, { id: 11, name: "Морковь 🥕", cat: "veg" },
+        { id: 12, name: "Чеснок 🧄", cat: "veg" }, { id: 25, name: "Помидоры 🍅", cat: "veg" },
+        { id: 19, name: "Свежие огурцы 🥒", cat: "veg" }, { id: 75, name: "Соленые огурцы 🥒", cat: "veg" },
+        { id: 18, name: "Болгарский перец 🫑", cat: "veg" }, { id: 70, name: "Кабачки 🥒", cat: "veg" },
+        { id: 71, name: "Баклажаны 🍆", cat: "veg" }, { id: 17, name: "Капуста 🥬", cat: "veg" },
+        { id: 37, name: "Брокколи / Цветная 🥦", cat: "veg" }, { id: 72, name: "Свекла 🍠", cat: "veg" },
+        { id: 26, name: "Грибы 🍄", cat: "veg" }, { id: 20, name: "Зелень 🌿", cat: "veg" },
+
+        // 🍝 Бакалея и Мучное (grocery)
+        { id: 8, name: "Макароны 🍝", cat: "grocery" }, { id: 13, name: "Рис 🍚", cat: "grocery" },
+        { id: 23, name: "Гречка 🟤", cat: "grocery" }, { id: 41, name: "Овсянка 🥣", cat: "grocery" },
+        { id: 4, name: "Мука 🌾", cat: "grocery" }, { id: 34, name: "Хлеб / Батон 🍞", cat: "grocery" },
+        { id: 74, name: "Лаваш / Тортилья 🌯", cat: "grocery" }, { id: 45, name: "Пельмени 🥟", cat: "grocery" },
+        { id: 49, name: "Заморож. овощи 🥦", cat: "grocery" },
+
+        // 🥫 Консервы, Соусы и Добавки (sauce)
+        { id: 40, name: "Раст. масло 🌻", cat: "sauce" }, { id: 38, name: "Майонез 🥣", cat: "sauce" },
+        { id: 39, name: "Кетчуп / Паста 🍅", cat: "sauce" }, { id: 43, name: "Соевый соус 🥢", cat: "sauce" },
+        { id: 51, name: "Горчица 🌭", cat: "sauce" }, { id: 36, name: "Фасоль консерв. 🫘", cat: "sauce" },
+        { id: 47, name: "Кукуруза 🌽", cat: "sauce" }, { id: 48, name: "Горошек 🫛", cat: "sauce" },
+        { id: 76, name: "Мёд 🍯", cat: "sauce" }, { id: 31, name: "Лимон 🍋", cat: "sauce" },
+        { id: 32, name: "Яблоки 🍏", cat: "sauce" }, { id: 52, name: "Сахар 🧊", cat: "sauce" }
       ];
 
-      let selectedIngredients = new Set();
+      let ingredientStates = {}; 
       let selectedTime = "any";
-      let currentRecipes = []; // Хранит загруженные сейчас рецепты
-      let favoriteRecipes = []; // Хранит избранное из облака
+      let currentCategory = 'all'; // НОВОЕ: Текущая категория
+      let currentRecipes = []; 
+      let favoriteRecipes = [];
 
-      // Загрузка избранного из облака Telegram при старте
       tg.CloudStorage.getItem("fav_recipes", (err, val) => {
         if (!err && val) {
-          try {
-            favoriteRecipes = JSON.parse(val);
-          } catch (e) {}
+          try { favoriteRecipes = JSON.parse(val); } catch (e) {}
         }
       });
 
-      // Время
       function setTime(val) {
         selectedTime = val;
-        document
-          .querySelectorAll(".time-btn")
-          .forEach((btn) => btn.classList.remove("active"));
+        document.querySelectorAll(".time-btn").forEach((btn) => btn.classList.remove("active"));
         event.target.classList.add("active");
       }
 
-      // Рендер продуктов
+      // НОВОЕ: Логика фильтрации
+      function filterIngredients() {
+        renderIngredients();
+      }
+
+      function setCategory(cat, btnElement) {
+        currentCategory = cat;
+        document.querySelectorAll(".cat-btn").forEach((btn) => btn.classList.remove("active"));
+        btnElement.classList.add("active");
+        renderIngredients();
+      }
+
       function renderIngredients() {
         const listContainer = document.getElementById("ingredients-list");
+        listContainer.innerHTML = '';
+        
+        const searchQuery = document.getElementById("searchInput").value.toLowerCase();
+
         AVAILABLE_INGREDIENTS.forEach((ingredient) => {
+          // Фильтр по категории
+          if (currentCategory !== 'all' && ingredient.cat !== currentCategory) return;
+          // Фильтр по поиску
+          if (searchQuery && !ingredient.name.toLowerCase().includes(searchQuery)) return;
+
           const tile = document.createElement("div");
           tile.className = "ingredient-tile";
           tile.innerText = ingredient.name;
+          
+          // Восстанавливаем сохраненное состояние (Включено/Исключено)
+          let currentState = ingredientStates[ingredient.id] || 0;
+          if (currentState === 1) tile.classList.add("included");
+          if (currentState === 2) tile.classList.add("excluded");
+          
           tile.addEventListener("click", () => {
-            if (selectedIngredients.has(ingredient.id)) {
-              selectedIngredients.delete(ingredient.id);
-              tile.classList.remove("selected");
+            let state = ingredientStates[ingredient.id] || 0;
+            
+            if (state === 0) {
+                ingredientStates[ingredient.id] = 1;
+                tile.classList.add("included");
+                tile.classList.remove("excluded");
+            } else if (state === 1) {
+                ingredientStates[ingredient.id] = 2;
+                tile.classList.remove("included");
+                tile.classList.add("excluded");
             } else {
-              selectedIngredients.add(ingredient.id);
-              tile.classList.add("selected");
-              tg.HapticFeedback.selectionChanged();
+                ingredientStates[ingredient.id] = 0;
+                tile.classList.remove("excluded");
             }
+            
+            tg.HapticFeedback.selectionChanged();
             updateMainButton();
           });
+          
           listContainer.appendChild(tile);
         });
+
+        // Если при поиске ничего не найдено
+        if (listContainer.innerHTML === '') {
+            listContainer.innerHTML = '<p style="color: #999; text-align: center; width: 100%;">Продукты не найдены 🤷‍♂️</p>';
+        }
       }
 
       function updateMainButton() {
-        if (selectedIngredients.size > 0) {
-          tg.MainButton.text = `Найти рецепты (${selectedIngredients.size})`;
+        let incCount = 0;
+        let excCount = 0;
+        for (let id in ingredientStates) {
+            if (ingredientStates[id] === 1) incCount++;
+            if (ingredientStates[id] === 2) excCount++;
+        }
+
+        if (incCount > 0) {
+          let text = `Найти рецепты (${incCount} ➕`;
+          if (excCount > 0) text += `, ${excCount} ➖`;
+          text += `)`;
+          tg.MainButton.text = text;
           tg.MainButton.show();
         } else {
           tg.MainButton.hide();
         }
       }
 
-      // Поиск (Обращение к API)
       async function performSearch() {
         document.getElementById("loading-overlay").classList.remove("hidden");
         tg.MainButton.hide();
 
-        try {
-          // ВАЖНО: ВАША ССЫЛКА НА RENDER
-          const response = await fetch(
-            "https://fridge-api-a3wl.onrender.com/api/find-recipes",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                ingredient_ids: Array.from(selectedIngredients),
-                time_limit: selectedTime,
-              }),
-            },
-          );
+        let includedIds = [];
+        let excludedIds = [];
+        for (let id in ingredientStates) {
+            if (ingredientStates[id] === 1) includedIds.push(parseInt(id));
+            if (ingredientStates[id] === 2) excludedIds.push(parseInt(id));
+        }
 
+        try {
+          const response = await fetch("https://fridge-api-a3wl.onrender.com/api/find-recipes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ingredient_ids: includedIds,
+              excluded_ids: excludedIds,
+              time_limit: selectedTime,
+            }),
+          });
           const data = await response.json();
-          currentRecipes = data.recipes;
+          currentRecipes = data.recipes || [];
           renderRecipes(currentRecipes, "recipes-list", false);
 
           document.getElementById("ingredients-screen").classList.add("hidden");
           document.getElementById("recipes-screen").classList.remove("hidden");
           tg.HapticFeedback.notificationOccurred("success");
         } catch (error) {
-          tg.showAlert("Ошибка связи с сервером.");
+          tg.showAlert("Ошибка связи с сервером. Попробуйте еще раз.");
         } finally {
           document.getElementById("loading-overlay").classList.add("hidden");
         }
       }
+
       tg.MainButton.onClick(() => {
-        if (
-          !document
-            .getElementById("loading-overlay")
-            .classList.contains("hidden")
-        )
-          return;
+        if (!document.getElementById("loading-overlay").classList.contains("hidden")) return;
         performSearch();
       });
 
-      // Рендер рецептов (используется и для поиска, и для Избранного)
       function renderRecipes(recipes, containerId, isFavoritesTab) {
-            const container = document.getElementById(containerId);
-            container.innerHTML = ''; 
-            if (recipes.length === 0) { 
-                container.innerHTML = '<p style="text-align:center; margin-top:30px;">Ничего не найдено 😔</p>'; 
-                return; 
-            }
+        const container = document.getElementById(containerId);
+        container.innerHTML = ''; 
+        if (recipes.length === 0) { 
+            container.innerHTML = '<p style="text-align:center; margin-top:30px;">Ничего не найдено 😔</p>'; 
+            return; 
+        }
 
-            recipes.forEach((recipe, index) => {
-                const card = document.createElement('div');
-                card.className = 'recipe-card';
-                
-                const stepsHtml = (recipe.steps || []).map(step => `<li>${step}</li>`).join('');
-                const missingHtml = (recipe.missing_ingredients && recipe.missing_ingredients.length > 0 && !isFavoritesTab)
-                    ? `<div style="color: #e53935; font-size:13px; margin-bottom:8px;">🛒 Докупить: <b>${recipe.missing_ingredients.join(', ')}</b></div>` 
-                    : '';
+        recipes.forEach((recipe, index) => {
+            const card = document.createElement('div');
+            card.className = 'recipe-card';
+            
+            const stepsHtml = (recipe.steps || []).map(step => `<li>${step}</li>`).join('');
+            const missingHtml = (recipe.missing_ingredients && recipe.missing_ingredients.length > 0 && !isFavoritesTab)
+                ? `<div style="color: #e53935; font-size:13px; margin-bottom:8px;">🛒 Докупить: <b>${recipe.missing_ingredients.join(', ')}</b></div>` 
+                : '';
+            const m = recipe.macros || {kcal:0, protein:0, fat:0, carbs:0};
+            const isFav = favoriteRecipes.some(r => r.name === recipe.name);
 
-                const m = recipe.macros || {kcal:0, protein:0, fat:0, carbs:0};
-                const isFav = favoriteRecipes.some(r => r.name === recipe.name);
+            card.innerHTML = `
+                <button class="fav-btn" onclick="toggleFavorite(${index}, this, ${isFavoritesTab})">${isFav ? '❤️' : '🤍'}</button>
+                <div class="recipe-title">${recipe.name}</div>
+                <div class="badges-row">
+                    <span class="badge time">⏱ ${recipe.time || '? мин'}</span>
+                    <span class="badge">🔥 ${m.kcal} ккал</span>
+                    <span class="badge">Б: ${m.protein}г</span>
+                    <span class="badge">Ж: ${m.fat}г</span>
+                    <span class="badge">У: ${m.carbs}г</span>
+                </div>
+                ${missingHtml}
+                <details><summary>Показать рецепт</summary><ol>${stepsHtml}</ol></details>
+                <div class="action-buttons">
+                    <button class="action-btn secondary" onclick="sendToBot(${index}, ${isFavoritesTab})">📨 Отправить в чат</button>
+                    <button class="action-btn" onclick="shareRecipe(${index}, ${isFavoritesTab})">✈️ Поделиться</button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+      }
 
-                card.innerHTML = `
-                    <button class="fav-btn" onclick="toggleFavorite(${index}, this, ${isFavoritesTab})">${isFav ? '❤️' : '🤍'}</button>
-                    <div class="recipe-title">${recipe.name}</div>
-                    
-                    <div class="badges-row">
-                        <span class="badge time">⏱ ${recipe.time || '? мин'}</span>
-                        <span class="badge">🔥 ${m.kcal} ккал</span>
-                        <span class="badge">Б: ${m.protein}г</span>
-                        <span class="badge">Ж: ${m.fat}г</span>
-                        <span class="badge">У: ${m.carbs}г</span>
-                    </div>
-                    ${missingHtml}
-                    
-                    <details><summary>Показать рецепт</summary><ol>${stepsHtml}</ol></details>
-                    
-                    <div class="action-buttons">
-                        <!-- Новая кнопка отправки в бота -->
-                        <button class="action-btn secondary" onclick="sendToBot(${index}, ${isFavoritesTab})">📨 Отправить мне в чат</button>
-                        <button class="action-btn" onclick="shareRecipe(${index}, ${isFavoritesTab})">✈️ Поделиться</button>
-                    </div>
-                `;
-                container.appendChild(card);
+      async function sendToBot(index, fromFavorites) {
+        const recipe = fromFavorites ? favoriteRecipes[index] : currentRecipes[index];
+        const userId = tg.initDataUnsafe?.user?.id; 
+        if (!userId) { tg.showAlert("Откройте приложение с телефона."); return; }
+
+        const m = recipe.macros || {kcal:0, protein:0, fat:0, carbs:0};
+        let text = `👨‍🍳 *${recipe.name}*\n`;
+        text += `⏱ ${recipe.time || '? мин'} | 🔥 ${m.kcal} ккал\n(Белки: ${m.protein}г | Жиры: ${m.fat}г | Углеводы: ${m.carbs}г)\n\n`;
+        text += `*Шаги приготовления:*\n`;
+        (recipe.steps || []).forEach((step, i) => { text += `${i+1}. ${step}\n`; });
+        if (recipe.missing_ingredients && recipe.missing_ingredients.length > 0) {
+            text += `\n🛒 *Нужно докупить:*\n- ${recipe.missing_ingredients.join("\n- ")}`;
+        }
+
+        tg.MainButton.showProgress();
+        try {
+            const response = await fetch('https://fridge-api-a3wl.onrender.com/api/send-to-bot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, text: text })
             });
-        }
-
-        // НОВАЯ ФУНКЦИЯ: Отправка рецепта и списка покупок прямо в чат с ботом
-        async function sendToBot(index, fromFavorites) {
-            const recipe = fromFavorites ? favoriteRecipes[index] : currentRecipes[index];
-            const userId = tg.initDataUnsafe?.user?.id; // Получаем ID пользователя из Telegram API
-            
-            if (!userId) {
-                tg.showAlert("Не удалось определить ваш Telegram ID. Откройте приложение с телефона.");
-                return;
-            }
-
-            // Формируем красивый текст сообщения
-            const m = recipe.macros || {kcal:0, protein:0, fat:0, carbs:0};
-            let text = `👨‍🍳 *${recipe.name}*\n`;
-            text += `⏱ ${recipe.time || '? мин'} | 🔥 ${m.kcal} ккал\n(Белки: ${m.protein}г | Жиры: ${m.fat}г | Углеводы: ${m.carbs}г)\n\n`;
-            
-            text += `*Шаги приготовления:*\n`;
-            (recipe.steps || []).forEach((step, i) => { text += `${i+1}. ${step}\n`; });
-
-            // Если есть продукты, которые нужно докупить, добавляем их в самый низ
-            if (recipe.missing_ingredients && recipe.missing_ingredients.length > 0) {
-                text += `\n🛒 *Нужно докупить:*\n- ${recipe.missing_ingredients.join("\n- ")}`;
-            }
-
-            tg.MainButton.showProgress();
-
-            try {
-                const response = await fetch('https://fridge-api-a3wl.onrender.com/api/send-to-bot', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: userId, text: text })
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    tg.HapticFeedback.notificationOccurred('success');
-                    tg.showAlert("Рецепт и список покупок отправлены вам в чат! 🚀");
-                    // Можно раскомментировать строку ниже, чтобы приложение сразу закрывалось после отправки:
-                    // tg.close();
-                } else {
-                    tg.showAlert("Ошибка при отправке: " + (result.error || "Неизвестная ошибка"));
-                }
-            } catch (error) {
-                tg.showAlert("Ошибка сети при отправке в чат.");
-            } finally {
-                tg.MainButton.hideProgress();
-            }
-        }
-
-        function shareRecipe(index, fromFavorites) {
-            const recipe = fromFavorites ? favoriteRecipes[index] : currentRecipes[index];
-            const m = recipe.macros || {kcal:0, protein:0, fat:0, carbs:0};
-            let text = `👨‍🍳 *${recipe.name}*\n⏱ ${recipe.time} | 🔥 ${m.kcal} ккал\n\nШаги приготовления:\n` + recipe.steps.map((s,i) => `${i+1}. ${s}`).join("\n");
-            
-            if (recipe.missing_ingredients && recipe.missing_ingredients.length > 0) {
-                 text += `\n\n🛒 *Нужно докупить:*\n- ${recipe.missing_ingredients.join("\n- ")}`;
-            }
-            
-            tg.openTelegramLink(`https://t.me/share/url?url=&text=${encodeURIComponent(text)}`);
-        }
-
-        function toggleFavorite(index, btnElement, fromFavorites) {
-            const recipe = fromFavorites ? favoriteRecipes[index] : currentRecipes[index];
-            const favIndex = favoriteRecipes.findIndex(r => r.name === recipe.name);
-            
-            if (favIndex > -1) {
-                favoriteRecipes.splice(favIndex, 1);
-                btnElement.innerText = '🤍';
-                if (fromFavorites) showFavorites();
-            } else {
-                favoriteRecipes.push(recipe);
-                btnElement.innerText = '❤️';
+            const result = await response.json();
+            if (result.success) {
                 tg.HapticFeedback.notificationOccurred('success');
+                tg.showAlert("Рецепт и список покупок отправлены вам в чат! 🚀");
+            } else {
+                tg.showAlert("Ошибка: " + (result.error || "Неизвестная ошибка"));
             }
-            tg.CloudStorage.setItem('fav_recipes', JSON.stringify(favoriteRecipes));
+        } catch (error) {
+            tg.showAlert("Ошибка сети при отправке в чат.");
+        } finally {
+            tg.MainButton.hideProgress();
         }
+      }
 
-        function showFavorites() {
-            document.getElementById('ingredients-screen').classList.add('hidden');
-            document.getElementById('recipes-screen').classList.remove('hidden');
-            tg.MainButton.hide();
-            document.querySelector('#recipes-screen h2').innerText = "❤️ Мои рецепты";
-            renderRecipes(favoriteRecipes, 'recipes-list', true);
+      function shareRecipe(index, fromFavorites) {
+        const recipe = fromFavorites ? favoriteRecipes[index] : currentRecipes[index];
+        const m = recipe.macros || {kcal:0, protein:0, fat:0, carbs:0};
+        let text = `👨‍🍳 *${recipe.name}*\n⏱ ${recipe.time} | 🔥 ${m.kcal} ккал\n\nШаги приготовления:\n` + recipe.steps.map((s,i) => `${i+1}. ${s}`).join("\n");
+        if (recipe.missing_ingredients && recipe.missing_ingredients.length > 0) {
+             text += `\n\n🛒 *Нужно докупить:*\n- ${recipe.missing_ingredients.join("\n- ")}`;
         }
+        tg.openTelegramLink(`https://t.me/share/url?url=&text=${encodeURIComponent(text)}`);
+      }
 
-        function showIngredientsScreen() {
-            document.getElementById('recipes-screen').classList.add('hidden');
-            document.getElementById('ingredients-screen').classList.remove('hidden');
-            document.querySelector('#recipes-screen h2').innerText = "Идеи для ужина 🍳";
-            updateMainButton();
+      function toggleFavorite(index, btnElement, fromFavorites) {
+        const recipe = fromFavorites ? favoriteRecipes[index] : currentRecipes[index];
+        const favIndex = favoriteRecipes.findIndex(r => r.name === recipe.name);
+        if (favIndex > -1) {
+            favoriteRecipes.splice(favIndex, 1);
+            btnElement.innerText = '🤍';
+            if (fromFavorites) showFavorites();
+        } else {
+            favoriteRecipes.push(recipe);
+            btnElement.innerText = '❤️';
+            tg.HapticFeedback.notificationOccurred('success');
         }
+        tg.CloudStorage.setItem('fav_recipes', JSON.stringify(favoriteRecipes));
+      }
 
-        renderIngredients();
+      function showFavorites() {
+        document.getElementById('ingredients-screen').classList.add('hidden');
+        document.getElementById('recipes-screen').classList.remove('hidden');
+        tg.MainButton.hide();
+        document.querySelector('#recipes-screen h2').innerText = "❤️ Мои рецепты";
+        renderRecipes(favoriteRecipes, 'recipes-list', true);
+      }
+
+      function showIngredientsScreen() {
+        document.getElementById('recipes-screen').classList.add('hidden');
+        document.getElementById('ingredients-screen').classList.remove('hidden');
+        document.querySelector('#recipes-screen h2').innerText = "Идеи для ужина 🍳";
+        updateMainButton();
+      }
+
+      // Запуск
+      renderIngredients();
     </script>
-</body>
+  </body>
 </html>
