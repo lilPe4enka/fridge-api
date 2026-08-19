@@ -117,7 +117,7 @@ async def find_recipes(req: RecipeRequest):
     if excluded_ingredients:
         user_prompt += f"\nНЕ ИСПОЛЬЗОВАТЬ (даже в missing_ingredients): {', '.join(excluded_ingredients)}."
     
-    user_prompt += "\nПридумай 2-3 рецепта."
+    user_prompt += "\nПридумай 8-10 рецепта."
     
     try:
         response = await ai_client.aio.models.generate_content(
